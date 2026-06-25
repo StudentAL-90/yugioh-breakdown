@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Yu-Gi-Oh Deck Analyzer</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+          rel="stylesheet">
+</head>
+
+<body class="bg-light">
+
+<div class="container mt-5">
+
+    <div class="row justify-content-center">
+
+        <div class="col-lg-8">
+
+            <div class="card shadow">
+
+                <div class="card-header text-center">
+
+                    <h1>
+                        Yu-Gi-Oh Deck Analyzer
+                    </h1>
+
+                    <p class="text-muted">
+                        Upload a deck list and calculate its value
+                    </p>
+
+                </div>
+
+                <div class="card-body">
+
+                    <form method="post"
+                          enctype="multipart/form-data">
+
+                        {% csrf_token %}
+
+                        <div class="mb-3">
+                            <label class="form-label">
+                                Deck Name
+                            </label>
+
+                            <input type="text"
+                                   name="deck_name"
+                                   class="form-control"
+                                   placeholder="Example: Blue-Eyes Chaos">
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label" for="{{ form.deck_text.id_for_label }}">
+                                Paste Deck List
+                            </label>
+
+                            {{ form.deck_text }}
+
+                            <div class="form-text">
+                                Put one card on each line. Start with a quantity, or leave it off for 1 copy.
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+
+                            <label class="form-label" for="{{ form.deck_file.id_for_label }}">
+                                Or Upload Deck List
+                            </label>
+
+                            {{ form.deck_file }}
+
+                        </div>
+
+                        <div class="form-check mb-3">
+
+                            {{ form.include_card_breakdown }}
+
+                            <label class="form-check-label" for="{{ form.include_card_breakdown.id_for_label }}">
+                                Show AI card breakdown
+                            </label>
+
+                            <div class="form-text">
+                                Adds a separate expandable section with individual card roles and text.
+                            </div>
+
+                        </div>
+
+                        {% if form.non_field_errors %}
+
+                        <div class="alert alert-danger">
+                            {{ form.non_field_errors }}
+                        </div>
+
+                        {% endif %}
+
+                        <button type="submit"
+                                class="btn btn-primary w-100">
+
+                            Analyze Deck
+
+                        </button>
+
+                    </form>
+
+                </div>
+
+            </div>
+
+            {% if result %}
+
+            <div class="card shadow mt-4">
+
+                <div class="card-header">
+
+                    <h3>
+                        Deck Results
+                    </h3>
+
+                </div>
+
+                <div class="card-body">
+
+                    <div class="alert alert-success">
+
+                        <strong>Total Deck Cost:</strong>
+
+                        ${{ result.total }}
+
+                    </div>
+
+                    <h4>
+                        Card Breakdown
+                    </h4>
+
+                    <table class="table table-striped">
+
+                        <thead>
+
+                            <tr>
+                                <th>Qty</th>
+                                <th>Card</th>
+                                <th>Price Each</th>
+                                <th>Subtotal</th>
+                            </tr>
+
+                        </thead>
+
+                        <tbody>
+
+                        {% for card in result.breakdown %}
+
+                            <tr>
+
+                                <td>
+                                    {{ card.quantity }}
+                                </td>
+
+                                <td>
+                                    {{ card.name }}
+                                </td>
+
+                                <td>
+                                    ${{ card.price_each }}
+                                </td>
+
+                                <td>
+                                    ${{ card.subtotal }}
+                                </td>
+
+                            </tr>
+
+                        {% endfor %}
+
+                        </tbody>
+
+                    </table>
+
+                    {% if result.missing_cards %}
+
+                    <div class="alert alert-warning">
+                        <strong>Could not find prices for:</strong>
+                        {{ result.missing_cards|join:", " }}
+                    </div>
+
+                    {% endif %}
+
+                </div>
+
+            </div>
+
+            {% endif %}
+
+            {% if card_analysis or analysis_errors %}
+
+            <div class="card shadow mt-4">
+
+                <div class="card-header d-flex justify-content-between align-items-center gap-3">
+
+                    <h3 class="mb-0">
+                        AI Card Breakdown
+                    </h3>
+
+                    <button class="btn btn-outline-primary btn-sm"
+                            type="button"
+                            data-bs-toggle="collapse"
+                            data-bs-target="#aiCardBreakdown"
+                            aria-expanded="true"
+                            aria-controls="aiCardBreakdown">
+                        Toggle Section
+                    </button>
+
+                </div>
+
+                <div id="aiCardBreakdown"
+                     class="collapse show">
+
+                    <div class="card-body">
+
+                        {% if analysis_errors %}
+
+                        <div class="alert alert-warning">
+                            <strong>Some cards could not be analyzed:</strong>
+                            {{ analysis_errors|join:", " }}
+                        </div>
+
+                        {% endif %}
+
+                        {% if card_analysis %}
+
+                        <div class="accordion"
+                             id="cardAnalysisAccordion">
+
+                            {% for card in card_analysis %}
+
+                            <div class="accordion-item">
+
+                                <h4 class="accordion-header"
+                                    id="cardHeading{{ forloop.counter }}">
+
+                                    <button class="accordion-button collapsed"
+                                            type="button"
+                                            data-bs-toggle="collapse"
+                                            data-bs-target="#cardAnalysis{{ forloop.counter }}"
+                                            aria-expanded="false"
+                                            aria-controls="cardAnalysis{{ forloop.counter }}">
+                                        {{ card.quantity }}x {{ card.name }}
+                                    </button>
+
+                                </h4>
+
+                                <div id="cardAnalysis{{ forloop.counter }}"
+                                     class="accordion-collapse collapse"
+                                     aria-labelledby="cardHeading{{ forloop.counter }}"
+                                     data-bs-parent="#cardAnalysisAccordion">
+
+                                    <div class="accordion-body">
+
+                                        <div class="mb-3">
+
+                                            <h5>
+                                                Local Card Roles
+                                            </h5>
+
+                                            {% for category in card.categories %}
+
+                                            <span class="badge text-bg-primary me-1">
+                                                {{ category }}
+                                            </span>
+
+                                            {% endfor %}
+
+                                        </div>
+
+                                        <dl class="row mb-3">
+
+                                            <dt class="col-sm-3">
+                                                Type
+                                            </dt>
+
+                                            <dd class="col-sm-9">
+                                                {{ card.type }}
+                                            </dd>
+
+                                            {% if card.race %}
+
+                                            <dt class="col-sm-3">
+                                                Race
+                                            </dt>
+
+                                            <dd class="col-sm-9">
+                                                {{ card.race }}
+                                            </dd>
+
+                                            {% endif %}
+
+                                            {% if card.attribute %}
+
+                                            <dt class="col-sm-3">
+                                                Attribute
+                                            </dt>
+
+                                            <dd class="col-sm-9">
+                                                {{ card.attribute }}
+                                            </dd>
+
+                                            {% endif %}
+
+                                            {% if card.level %}
+
+                                            <dt class="col-sm-3">
+                                                Level/Rank
+                                            </dt>
+
+                                            <dd class="col-sm-9">
+                                                {{ card.level }}
+                                            </dd>
+
+                                            {% endif %}
+
+                                            {% if card.atk != None %}
+
+                                            <dt class="col-sm-3">
+                                                ATK
+                                            </dt>
+
+                                            <dd class="col-sm-9">
+                                                {{ card.atk }}
+                                            </dd>
+
+                                            {% endif %}
+
+                                            {% if card.def != None %}
+
+                                            <dt class="col-sm-3">
+                                                DEF
+                                            </dt>
+
+                                            <dd class="col-sm-9">
+                                                {{ card.def }}
+                                            </dd>
+
+                                            {% endif %}
+
+                                        </dl>
+
+                                        {% if card.ai_explanation %}
+
+                                        <div class="mb-3">
+
+                                            <h5>
+                                                AI Summary
+                                            </h5>
+
+                                            <p>
+                                                {{ card.ai_explanation.summary }}
+                                            </p>
+
+                                        </div>
+
+                                        {% if card.ai_explanation.activates %}
+
+                                        <div class="mb-3">
+
+                                            <h5>
+                                                Activates
+                                            </h5>
+
+                                            <p>
+                                                {{ card.ai_explanation.activates }}
+                                            </p>
+
+                                        </div>
+
+                                        {% endif %}
+
+                                        {% if card.ai_explanation.stops %}
+
+                                        <div class="mb-3">
+
+                                            <h5>
+                                                Stops
+                                            </h5>
+
+                                            <ul class="mb-0">
+
+                                                {% for item in card.ai_explanation.stops %}
+
+                                                <li>
+                                                    {{ item }}
+                                                </li>
+
+                                                {% endfor %}
+
+                                            </ul>
+
+                                        </div>
+
+                                        {% endif %}
+
+                                        {% if card.ai_explanation.common_uses %}
+
+                                        <div class="mb-3">
+
+                                            <h5>
+                                                Common Uses
+                                            </h5>
+
+                                            <ul class="mb-0">
+
+                                                {% for item in card.ai_explanation.common_uses %}
+
+                                                <li>
+                                                    {{ item }}
+                                                </li>
+
+                                                {% endfor %}
+
+                                            </ul>
+
+                                        </div>
+
+                                        {% endif %}
+
+                                        {% if card.ai_explanation.strengths %}
+
+                                        <div class="mb-3">
+
+                                            <h5>
+                                                Strengths
+                                            </h5>
+
+                                            <ul class="mb-0">
+
+                                                {% for item in card.ai_explanation.strengths %}
+
+                                                <li>
+                                                    {{ item }}
+                                                </li>
+
+                                                {% endfor %}
+
+                                            </ul>
+
+                                        </div>
+
+                                        {% endif %}
+
+                                        {% if card.ai_explanation.weaknesses %}
+
+                                        <div>
+
+                                            <h5>
+                                                Weaknesses
+                                            </h5>
+
+                                            <ul class="mb-0">
+
+                                                {% for item in card.ai_explanation.weaknesses %}
+
+                                                <li>
+                                                    {{ item }}
+                                                </li>
+
+                                                {% endfor %}
+
+                                            </ul>
+
+                                        </div>
+
+                                        {% endif %}
+
+                                        {% else %}
+
+                                        <div>
+
+                                            <h5>
+                                                Card Effect Fallback
+                                            </h5>
+
+                                            <p class="mb-0">
+                                                {{ card.description }}
+                                            </p>
+
+                                        </div>
+
+                                        {% endif %}
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                            {% endfor %}
+
+                        </div>
+
+                        {% endif %}
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            {% endif %}
+
+        </div>
+
+    </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js">
+</script>
+
+</body>
+</html>
